@@ -48,8 +48,8 @@ public struct TransformsData: Codable {
 
 public struct TransformFrame: Codable {
     public let file_path: String
-    public let depth_file_path: String
-    public let confidence_file_path: String
+    public let depth_file_path: String?
+    public let confidence_file_path: String?
     public let fl_x: Double
     public let fl_y: Double
     public let cx: Double
@@ -59,8 +59,8 @@ public struct TransformFrame: Codable {
 
     public init(
         filePath: String,
-        depthFilePath: String,
-        confidenceFilePath: String,
+        depthFilePath: String? = nil,
+        confidenceFilePath: String? = nil,
         fl_x: Double,
         fl_y: Double,
         cx: Double,

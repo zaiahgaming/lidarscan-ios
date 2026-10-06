@@ -133,7 +133,12 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
             .appendingPathComponent(currentCaptureName, isDirectory: true)
 
         do {
-            try FileManager.default.createDirectory(at: sessionFolder, withIntermediateDirectories: true)
+            let fm = FileManager.default
+            try fm.createDirectory(at: sessionFolder, withIntermediateDirectories: true)
+            try fm.createDirectory(at: sessionFolder.appendingPathComponent("images"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: sessionFolder.appendingPathComponent("depth"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: sessionFolder.appendingPathComponent("confidence"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: sessionFolder.appendingPathComponent("mesh"), withIntermediateDirectories: true)
             currentSessionFolder = sessionFolder
         } catch {
             print("Failed to create session folder: \(error)")

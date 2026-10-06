@@ -7,6 +7,15 @@ public struct DiscoveredStudio: Identifiable, Hashable {
     public let name: String
     public let host: String
     public let port: Int
+    public let candidateIPs: [String]
+
+    public init(id: String, name: String, host: String, port: Int, candidateIPs: [String] = []) {
+        self.id = id
+        self.name = name
+        self.host = host
+        self.port = port
+        self.candidateIPs = candidateIPs
+    }
 
     public var urlString: String {
         "http://\(host):\(port)"
@@ -76,8 +85,7 @@ public final class BonjourClient: NSObject, ObservableObject, NetServiceBrowserD
             hostName.removeLast()
         }
 
-        // Extract IP address from addresses data if available
-        var ipAddress = hostName
+        var candidateIPs: [String] = []
         if let addresses = sender.addresses {
             for data in addresses {
                 guard data.count >= MemoryLayout<sockaddr>.size else { continue }
@@ -89,18 +97,38 @@ public final class BonjourClient: NSObject, ObservableObject, NetServiceBrowserD
                         var addr = sin.pointee.sin_addr
                         var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
                         if inet_ntop(AF_INET, &addr, &buffer, socklen_t(INET_ADDRSTRLEN)) != nil {
-                            ipAddress = String(cString: buffer)
+                            let ip = String(cString: buffer)
+                            if !ip.isEmpty && ip != "127.0.0.1" && !candidateIPs.contains(ip) {
+                                candidateIPs.append(ip)
+                            }
                         }
                     }
                 }
             }
         }
 
+        // Sort candidate IPs so that typical home/office Wi-Fi (192.168.x.x, 10.x.x.x) come first,
+        // and virtual/hotspot/docker subnets (172.x.x.x) come last.
+        candidateIPs.sort { ip1, ip2 in
+            func rank(_ ip: String) -> Int {
+                if ip.hasPrefix("192.168.") { return 0 }
+                if ip.hasPrefix("10.") { return 1 }
+                return 2
+            }
+            let r1 = rank(ip1)
+            let r2 = rank(ip2)
+            if r1 != r2 { return r1 < r2 }
+            return ip1 < ip2
+        }
+
+        let bestHost = candidateIPs.first ?? hostName
+
         let studio = DiscoveredStudio(
             id: name,
             name: name,
-            host: ipAddress,
-            port: port > 0 ? port : 8765
+            host: bestHost,
+            port: port > 0 ? port : 8765,
+            candidateIPs: candidateIPs
         )
 
         resolvedMap[name] = studio

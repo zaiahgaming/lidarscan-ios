@@ -83,27 +83,45 @@ public struct StudioUploadSheet: View {
                             } else {
                                 ForEach(bonjourClient.discoveredServers) { server in
                                     Button(action: {
-                                        selectedHost = server.host
-                                        selectedPort = server.port
-                                        uploadClient.ping(host: server.host, port: server.port) { _, _ in }
+                                        selectAndPingServer(server)
                                     }) {
                                         HStack {
-                                            VStack(alignment: .leading, spacing: 2) {
+                                            VStack(alignment: .leading, spacing: 4) {
                                                 Text(server.name)
                                                     .font(.headline)
                                                     .foregroundColor(.white)
-                                                Text("http://\(server.host):\(server.port)")
+                                                Text("http://\(selectedHost.isEmpty ? server.host : selectedHost):\(server.port)")
                                                     .font(.caption)
                                                     .foregroundColor(.gray)
+
+                                                if server.candidateIPs.count > 1 {
+                                                    HStack(spacing: 6) {
+                                                        ForEach(server.candidateIPs, id: \.self) { ip in
+                                                            Text(ip)
+                                                                .font(.system(size: 11, weight: selectedHost == ip ? .bold : .regular, design: .monospaced))
+                                                                .padding(.horizontal, 6)
+                                                                .padding(.vertical, 2)
+                                                                .background(selectedHost == ip ? Color.blue : Color.white.opacity(0.1))
+                                                                .foregroundColor(selectedHost == ip ? .white : .gray)
+                                                                .cornerRadius(4)
+                                                                .onTapGesture {
+                                                                    selectedHost = ip
+                                                                    selectedPort = server.port
+                                                                    uploadClient.ping(host: ip, port: server.port) { _, _ in }
+                                                                }
+                                                        }
+                                                    }
+                                                    .padding(.top, 2)
+                                                }
                                             }
                                             Spacer()
-                                            if selectedHost == server.host && selectedPort == server.port {
+                                            if selectedHost == server.host || server.candidateIPs.contains(selectedHost) {
                                                 Image(systemName: "checkmark.circle.fill")
                                                     .foregroundColor(.blue)
                                             }
                                         }
                                         .padding()
-                                        .background(Color.white.opacity(selectedHost == server.host ? 0.12 : 0.05))
+                                        .background(Color.white.opacity((selectedHost == server.host || server.candidateIPs.contains(selectedHost)) ? 0.12 : 0.05))
                                         .cornerRadius(12)
                                     }
                                 }
@@ -120,7 +138,7 @@ public struct StudioUploadSheet: View {
 
                             VStack(spacing: 12) {
                                 HStack(spacing: 8) {
-                                    TextField("e.g. 192.168.0.148", text: $manualHost)
+                                    TextField("e.g. 192.168.0.212", text: $manualHost)
                                         .font(.subheadline)
                                         .padding(10)
                                         .background(Color.white.opacity(0.08))
@@ -137,6 +155,27 @@ public struct StudioUploadSheet: View {
                                         .cornerRadius(8)
                                         .foregroundColor(.white)
                                         .keyboardType(.numberPad)
+                                }
+
+                                // Quick IP presets if typing is tedious
+                                HStack(spacing: 8) {
+                                    Text("Quick Fill:")
+                                        .font(.caption2)
+                                        .foregroundColor(.gray)
+                                    Button("192.168.0.212") {
+                                        manualHost = "192.168.0.212"
+                                        manualPort = "8765"
+                                        selectedHost = "192.168.0.212"
+                                        selectedPort = 8765
+                                        uploadClient.ping(host: "192.168.0.212", port: 8765) { _, _ in }
+                                    }
+                                    .font(.caption.monospaced())
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.blue.opacity(0.2))
+                                    .foregroundColor(.cyan)
+                                    .cornerRadius(6)
+                                    Spacer()
                                 }
 
                                 Button(action: {
@@ -244,18 +283,49 @@ public struct StudioUploadSheet: View {
     }
 
     private var canUpload: Bool {
-        !selectedHost.isEmpty && targetZipURL != nil
+        !selectedHost.isEmpty && (targetZipURL != nil || FileManager.default.fileExists(atPath: capture.folderURL.path))
+    }
+
+    private func selectAndPingServer(_ server: DiscoveredStudio) {
+        let hostsToTry = !server.candidateIPs.isEmpty ? server.candidateIPs : [server.host]
+        tryPingHosts(hostsToTry, port: server.port, index: 0)
+    }
+
+    private func tryPingHosts(_ hosts: [String], port: Int, index: Int) {
+        guard index < hosts.count else { return }
+        let host = hosts[index]
+        self.selectedHost = host
+        self.selectedPort = port
+        uploadClient.ping(host: host, port: port) { success, _ in
+            if !success && index + 1 < hosts.count {
+                self.tryPingHosts(hosts, port: port, index: index + 1)
+            }
+        }
     }
 
     private func startUpload() {
-        guard let zipURL = targetZipURL else {
+        uploadCompleted = false
+        var zipURL = targetZipURL
+        if zipURL == nil {
+            let parentDir = capture.folderURL.deletingLastPathComponent()
+            let generatedZip = parentDir.appendingPathComponent("\(capture.name).lidarscan.zip")
+            uploadClient.uploadStatus = "Compressing scan for upload..."
+            do {
+                try ZipWriter.zip(folderURL: capture.folderURL, rootFolderName: capture.name, destinationZipURL: generatedZip)
+                zipURL = generatedZip
+            } catch {
+                uploadClient.uploadStatus = "Error compressing capture: \(error.localizedDescription)"
+                return
+            }
+        }
+
+        guard let finalZip = zipURL else {
             uploadClient.uploadStatus = "Error: .lidarscan.zip not found"
             return
         }
 
-        uploadCompleted = false
         uploadClient.upload(
-            zipURL: zipURL,
+            zipURL: finalZip,
             captureName: capture.name,
             host: selectedHost,
             port: selectedPort

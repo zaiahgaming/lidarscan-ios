@@ -9,8 +9,8 @@ public struct KeyframeRecord {
     public let imageWidth: Int
     public let imageHeight: Int
     public let imageRelativePath: String
-    public let depthRelativePath: String
-    public let confidenceRelativePath: String
+    public let depthRelativePath: String?
+    public let confidenceRelativePath: String?
 
     public init(
         index: Int,
@@ -20,8 +20,8 @@ public struct KeyframeRecord {
         imageWidth: Int,
         imageHeight: Int,
         imageRelativePath: String,
-        depthRelativePath: String,
-        confidenceRelativePath: String
+        depthRelativePath: String? = nil,
+        confidenceRelativePath: String? = nil
     ) {
         self.index = index
         self.timestamp = timestamp

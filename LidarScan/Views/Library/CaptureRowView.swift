@@ -8,43 +8,44 @@ public struct CaptureRowView: View {
     }
 
     public var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color.white.opacity(0.08))
-                    .frame(width: 52, height: 52)
+                    .frame(width: 44, height: 44)
                 Image(systemName: capture.hasMesh ? "cube.fill" : "circle.grid.cross.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: 20))
                     .foregroundColor(capture.hasMesh ? .cyan : .green)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(capture.name)
-                    .font(.headline)
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
+                    .truncationMode(.middle)
 
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Text(capture.formattedDate)
-                        .font(.caption)
-                        .foregroundColor(.gray)
-
+                        .lineLimit(1)
                     Text("•")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-
                     Text("\(capture.frameCount) frames")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                        .lineLimit(1)
                 }
+                .font(.caption)
+                .foregroundColor(.gray)
+                .fixedSize(horizontal: true, vertical: false)
             }
+            .layoutPriority(1)
 
-            Spacer()
+            Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text(capture.formattedSize)
-                    .font(.caption.monospaced())
+                    .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(.gray)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
 
                 if capture.hasMesh {
                     Text("MESH")

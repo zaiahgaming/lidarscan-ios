@@ -35,8 +35,7 @@ public struct SavedCapture: Identifiable, Hashable {
 
     public var formattedDate: String {
         let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
+        formatter.dateFormat = "MMM d, HH:mm"
         return formatter.string(from: createdDate)
     }
 

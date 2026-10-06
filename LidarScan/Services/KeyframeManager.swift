@@ -90,11 +90,6 @@ public final class KeyframeManager: @unchecked Sendable {
         let depthMap = frame.smoothedSceneDepth?.depthMap ?? frame.sceneDepth?.depthMap
         let confidenceMap = frame.smoothedSceneDepth?.confidenceMap ?? frame.sceneDepth?.confidenceMap
 
-        guard let depth = depthMap, let conf = confidenceMap else {
-            completion?(nil)
-            return
-        }
-
         queue.async { [weak self] in
             guard let self = self else { return }
 
@@ -105,12 +100,10 @@ public final class KeyframeManager: @unchecked Sendable {
 
             let frameString = String(format: "frame_%05d", currentIndex)
             let imgRelPath = "images/\(frameString).jpg"
-            let depthRelPath = "depth/\(frameString).png"
-            let confRelPath = "confidence/\(frameString).png"
-
             let imgURL = baseFolder.appendingPathComponent(imgRelPath)
-            let depthURL = baseFolder.appendingPathComponent(depthRelPath)
-            let confURL = baseFolder.appendingPathComponent(confRelPath)
+
+            // Ensure parent images directory exists
+            try? FileManager.default.createDirectory(at: imgURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
             // Save JPEG full res (orientation = sensor landscape, no rotation)
             let ciImage = CIImage(cvPixelBuffer: capturedImage)
@@ -123,20 +116,36 @@ public final class KeyframeManager: @unchecked Sendable {
                 try? jpegData.write(to: imgURL, options: .atomic)
             }
 
-            // Save 16-bit uint16 depth PNG
-            try? RawPNGWriter.writeDepthPNG(pixelBuffer: depth, to: depthURL)
+            var depthRelPath: String? = nil
+            var confRelPath: String? = nil
 
-            // Save 8-bit confidence PNG
-            try? RawPNGWriter.writeConfidencePNG(pixelBuffer: conf, to: confURL)
+            if let depth = depthMap, let conf = confidenceMap {
+                let dRel = "depth/\(frameString).png"
+                let cRel = "confidence/\(frameString).png"
+                let depthURL = baseFolder.appendingPathComponent(dRel)
+                let confURL = baseFolder.appendingPathComponent(cRel)
 
-            // Accumulate into colored point cloud
-            pointCloudManager.addPoints(
-                depthBuffer: depth,
-                confidenceBuffer: conf,
-                imageBuffer: capturedImage,
-                intrinsics: intrinsics,
-                c2w: transform
-            )
+                try? FileManager.default.createDirectory(at: depthURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? FileManager.default.createDirectory(at: confURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+
+                // Save 16-bit uint16 depth PNG
+                try? RawPNGWriter.writeDepthPNG(pixelBuffer: depth, to: depthURL)
+
+                // Save 8-bit confidence PNG
+                try? RawPNGWriter.writeConfidencePNG(pixelBuffer: conf, to: confURL)
+
+                // Accumulate into colored point cloud
+                pointCloudManager.addPoints(
+                    depthBuffer: depth,
+                    confidenceBuffer: conf,
+                    imageBuffer: capturedImage,
+                    intrinsics: intrinsics,
+                    c2w: transform
+                )
+
+                depthRelPath = dRel
+                confRelPath = cRel
+            }
 
             let w = CVPixelBufferGetWidth(capturedImage)
             let h = CVPixelBufferGetHeight(capturedImage)
