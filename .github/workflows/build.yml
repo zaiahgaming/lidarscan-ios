@@ -58,7 +58,7 @@ jobs:
           echo "Found app at: $APP_PATH"
           cp -r "$APP_PATH" Payload/
           # Merge the checked-in plist into the built plist. Existing resolved
-          # bundle values win; declared app capabilities and privacy strings are restored.
+          # bundle values win; required privacy and file-sharing values are restored.
           APP_PLIST="Payload/LidarScan.app/Info.plist"
           python3 - <<'PY'
           import plistlib
@@ -71,11 +71,15 @@ jobs:
               declared = plistlib.load(stream)
           for key, value in declared.items():
               built.setdefault(key, value)
-          # Enforce privacy and file-sharing declarations from the source plist.
-          for key in ("NSCameraUsageDescription", "NSLocalNetworkUsageDescription",
-                      "NSBonjourServices", "UIFileSharingEnabled",
-                      "LSSupportsOpeningDocumentsInPlace"):
-              built[key] = declared[key]
+          # Enforce required keys explicitly because XcodeGen may omit plist entries
+          # when generating the project, even though they exist in the source plist.
+          built.update({
+              "NSCameraUsageDescription": "LidarScan requires camera access to capture RGB frames and spatial keyframes for 3D reconstruction.",
+              "NSLocalNetworkUsageDescription": "LidarScan discovers local PC Studio servers via Bonjour to stream and upload 3D captures.",
+              "NSBonjourServices": ["_lidarscan._tcp"],
+              "UIFileSharingEnabled": True,
+              "LSSupportsOpeningDocumentsInPlace": True,
+          })
           with open(app_path, "wb") as stream:
               plistlib.dump(built, stream, fmt=plistlib.FMT_XML, sort_keys=False)
           PY
