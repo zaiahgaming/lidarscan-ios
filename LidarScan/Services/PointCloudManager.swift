@@ -144,9 +144,9 @@ public final class PointCloudManager: @unchecked Sendable {
         // Stream binary points in 64KB batches
         var buffer = Data(capacity: 64 * 1024)
         for pt in points {
-            var x = pt.position.x.littleEndian
-            var y = pt.position.y.littleEndian
-            var z = pt.position.z.littleEndian
+            var x = pt.position.x.bitPattern.littleEndian
+            var y = pt.position.y.bitPattern.littleEndian
+            var z = pt.position.z.bitPattern.littleEndian
             withUnsafeBytes(of: &x) { buffer.append(contentsOf: $0) }
             withUnsafeBytes(of: &y) { buffer.append(contentsOf: $0) }
             withUnsafeBytes(of: &z) { buffer.append(contentsOf: $0) }

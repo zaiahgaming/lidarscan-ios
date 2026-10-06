@@ -125,7 +125,7 @@ public final class MeshReconstructor: @unchecked Sendable {
         }())
         defer { try? handle.close() }
 
-        var header = "mtllib mesh.mtl\no mesh\n"
+        let header = "mtllib mesh.mtl\no mesh\n"
         if let hData = header.data(using: .utf8) { handle.write(hData) }
 
         var buf = ""
@@ -164,9 +164,9 @@ public final class MeshReconstructor: @unchecked Sendable {
 
         var vBuf = Data(capacity: 64 * 1024)
         for v in mesh.vertices {
-            var x = v.x.littleEndian
-            var y = v.y.littleEndian
-            var z = v.z.littleEndian
+            var x = v.x.bitPattern.littleEndian
+            var y = v.y.bitPattern.littleEndian
+            var z = v.z.bitPattern.littleEndian
             withUnsafeBytes(of: &x) { vBuf.append(contentsOf: $0) }
             withUnsafeBytes(of: &y) { vBuf.append(contentsOf: $0) }
             withUnsafeBytes(of: &z) { vBuf.append(contentsOf: $0) }

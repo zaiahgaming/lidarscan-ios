@@ -24,9 +24,9 @@ public enum GLBWriter {
             maxY = max(maxY, v.y)
             maxZ = max(maxZ, v.z)
 
-            var x = v.x.littleEndian
-            var y = v.y.littleEndian
-            var z = v.z.littleEndian
+            var x = v.x.bitPattern.littleEndian
+            var y = v.y.bitPattern.littleEndian
+            var z = v.z.bitPattern.littleEndian
             withUnsafeBytes(of: &x) { vertexData.append(contentsOf: $0) }
             withUnsafeBytes(of: &y) { vertexData.append(contentsOf: $0) }
             withUnsafeBytes(of: &z) { vertexData.append(contentsOf: $0) }
