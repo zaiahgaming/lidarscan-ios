@@ -22,6 +22,7 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
     @Published public var keyframeCount = 0
     @Published public var pointCount = 0
     @Published public var recentKeyframeFlashed = false
+    @Published public var sessionErrorMessage: String?
 
     @Published public var isProcessing = false
     @Published public var processingStage = ""
@@ -85,35 +86,42 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
     private func runARSession(on arView: ARView) {
         let configuration = ARWorldTrackingConfiguration()
 
-        if DeviceUtils.supportsLiDAR {
-            if mode == .lidarMesh {
-                if DeviceUtils.supportsClassification {
-                    configuration.sceneReconstruction = .meshWithClassification
-                } else {
-                    configuration.sceneReconstruction = .mesh
-                }
-                arView.debugOptions.insert(.showSceneUnderstanding)
+        // Check the individual ARKit capabilities before enabling optional LiDAR features.
+        if mode == .lidarMesh && ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
+            if DeviceUtils.supportsClassification {
+                configuration.sceneReconstruction = .meshWithClassification
             } else {
-                configuration.sceneReconstruction = []
-                arView.debugOptions.remove(.showSceneUnderstanding)
+                configuration.sceneReconstruction = .mesh
             }
+            arView.debugOptions.insert(.showSceneUnderstanding)
+        } else {
+            configuration.sceneReconstruction = []
+            arView.debugOptions.remove(.showSceneUnderstanding)
+        }
 
-            if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
-                configuration.frameSemantics.insert(.sceneDepth)
-            }
-            if ARWorldTrackingConfiguration.supportsFrameSemantics(.smoothedSceneDepth) {
-                configuration.frameSemantics.insert(.smoothedSceneDepth)
-            }
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+            configuration.frameSemantics.insert(.sceneDepth)
+        }
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.smoothedSceneDepth) {
+            configuration.frameSemantics.insert(.smoothedSceneDepth)
         }
 
         configuration.environmentTexturing = .automatic
         configuration.worldAlignment = .gravity
-
+        sessionErrorMessage = nil
         arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
     }
 
     public func startCapture() {
         guard !isRecording else { return }
+        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
+            trackingStateText = "Camera Access Required"
+            return
+        }
+        guard ARWorldTrackingConfiguration.isSupported else {
+            trackingStateText = "AR Not Supported"
+            return
+        }
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd_HHmmss"
@@ -149,6 +157,31 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
                 self.elapsedTime += 1
                 self.pointCount = self.pointCloudManager.pointCount
             }
+        }
+    }
+
+    public func session(_ session: ARSession, didFailWithError error: Error) {
+        DispatchQueue.main.async {
+            self.isRecording = false
+            self.isPaused = false
+            self.timer?.invalidate()
+            self.timer = nil
+            self.trackingIsNormal = false
+            self.trackingStateText = "AR Session Error"
+            self.sessionErrorMessage = error.localizedDescription
+        }
+    }
+
+    public func sessionWasInterrupted(_ session: ARSession) {
+        DispatchQueue.main.async {
+            self.trackingIsNormal = false
+            self.trackingStateText = "AR Session Interrupted"
+        }
+    }
+
+    public func sessionInterruptionEnded(_ session: ARSession) {
+        DispatchQueue.main.async { [weak self] in
+            self?.restartSession()
         }
     }
 

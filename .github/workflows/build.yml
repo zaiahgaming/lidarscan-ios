@@ -57,6 +57,33 @@ jobs:
           APP_PATH=$(find build -name "LidarScan.app" -type d | head -n 1)
           echo "Found app at: $APP_PATH"
           cp -r "$APP_PATH" Payload/
+          # Merge the checked-in plist into the built plist. Existing resolved
+          # bundle values win; declared app capabilities and privacy strings are restored.
+          APP_PLIST="Payload/LidarScan.app/Info.plist"
+          python3 - <<'PY'
+          import plistlib
+
+          app_path = "Payload/LidarScan.app/Info.plist"
+          source_path = "LidarScan/Info.plist"
+          with open(app_path, "rb") as stream:
+              built = plistlib.load(stream)
+          with open(source_path, "rb") as stream:
+              declared = plistlib.load(stream)
+          for key, value in declared.items():
+              built.setdefault(key, value)
+          # Enforce privacy and file-sharing declarations from the source plist.
+          for key in ("NSCameraUsageDescription", "NSLocalNetworkUsageDescription",
+                      "NSBonjourServices", "UIFileSharingEnabled",
+                      "LSSupportsOpeningDocumentsInPlace"):
+              built[key] = declared[key]
+          with open(app_path, "wb") as stream:
+              plistlib.dump(built, stream, fmt=plistlib.FMT_XML, sort_keys=False)
+          PY
+          plutil -lint "$APP_PLIST"
+          plutil -p "$APP_PLIST"
+          for key in NSCameraUsageDescription NSLocalNetworkUsageDescription UIFileSharingEnabled LSSupportsOpeningDocumentsInPlace NSBonjourServices; do
+            /usr/libexec/PlistBuddy -c "Print :$key" "$APP_PLIST" >/dev/null
+          done
           zip -qr LidarScan-unsigned.ipa Payload
           ls -lh LidarScan-unsigned.ipa
 

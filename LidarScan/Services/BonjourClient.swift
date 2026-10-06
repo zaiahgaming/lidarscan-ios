@@ -16,6 +16,7 @@ public struct DiscoveredStudio: Identifiable, Hashable {
 public final class BonjourClient: NSObject, ObservableObject, NetServiceBrowserDelegate, NetServiceDelegate {
     @Published public var discoveredServers: [DiscoveredStudio] = []
     @Published public var isBrowsing: Bool = false
+    @Published public var browseError: String?
 
     private var netServiceBrowser: NetServiceBrowser?
     private var resolvingServices: [NetService] = []
@@ -27,6 +28,7 @@ public final class BonjourClient: NSObject, ObservableObject, NetServiceBrowserD
 
     public func startBrowsing() {
         stopBrowsing()
+        browseError = nil
         isBrowsing = true
         netServiceBrowser = NetServiceBrowser()
         netServiceBrowser?.delegate = self
@@ -54,6 +56,13 @@ public final class BonjourClient: NSObject, ObservableObject, NetServiceBrowserD
         resolvedMap.removeValue(forKey: service.name)
         DispatchQueue.main.async {
             self.discoveredServers = Array(self.resolvedMap.values)
+        }
+    }
+
+    public func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
+        DispatchQueue.main.async {
+            self.isBrowsing = false
+            self.browseError = "Bonjour search failed. Check LidarScan's Local Network access in Settings, or enter a server address manually."
         }
     }
 

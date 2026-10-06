@@ -35,6 +35,14 @@ public struct ScannerView: View {
         .sheet(isPresented: $showingLibrary) {
             LibraryView()
         }
+        .alert("AR Session Error", isPresented: Binding(
+            get: { captureManager.sessionErrorMessage != nil },
+            set: { if !$0 { captureManager.sessionErrorMessage = nil } }
+        )) {
+            Button("OK") { captureManager.sessionErrorMessage = nil }
+        } message: {
+            Text(captureManager.sessionErrorMessage ?? "The camera session could not start.")
+        }
         .fullScreenCover(isPresented: $showingProcessing) {
             if let saved = captureManager.lastCompletedCapture {
                 ProcessingView(capture: saved, onDismiss: {

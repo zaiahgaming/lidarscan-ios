@@ -72,9 +72,9 @@ public struct StudioUploadSheet: View {
                                 HStack {
                                     Image(systemName: "antenna.radiowaves.left.and.right")
                                         .foregroundColor(.gray)
-                                    Text("Searching local network for _lidarscan._tcp...")
+                                    Text(bonjourClient.browseError ?? "Searching local network for _lidarscan._tcp...")
                                         .font(.caption)
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(bonjourClient.browseError == nil ? .gray : .orange)
                                     Spacer()
                                 }
                                 .padding()
