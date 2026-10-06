@@ -1,6 +1,6 @@
 import SwiftUI
+import RealityKit
 import ARKit
-import SceneKit
 
 public struct ARViewContainer: UIViewRepresentable {
     @ObservedObject var captureManager: ARCaptureManager
@@ -9,17 +9,11 @@ public struct ARViewContainer: UIViewRepresentable {
         self.captureManager = captureManager
     }
 
-    public func makeUIView(context: Context) -> ARSCNView {
-        let scnView = ARSCNView(frame: .zero)
-        scnView.antialiasingMode = .multisampling4X
-        scnView.autoenablesDefaultLighting = true
-        scnView.showsStatistics = false
-
-        DispatchQueue.main.async {
-            captureManager.attach(sceneView: scnView)
-        }
-        return scnView
+    public func makeUIView(context: Context) -> ARView {
+        let arView = ARView(frame: .zero)
+        captureManager.attach(arView: arView)
+        return arView
     }
 
-    public func updateUIView(_ uiView: ARSCNView, context: Context) {}
+    public func updateUIView(_ uiView: ARView, context: Context) {}
 }

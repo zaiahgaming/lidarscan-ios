@@ -1,10 +1,10 @@
 import Foundation
 import ARKit
-import SceneKit
+import RealityKit
 import Combine
 import AVFoundation
 
-public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelegate, ARSCNViewDelegate {
+public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelegate {
     @Published public var mode: CaptureMode = .lidarMesh {
         didSet {
             if oldValue != mode {
@@ -29,7 +29,7 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
     @Published public var lastCompletedCapture: SavedCapture?
     @Published public var currentCaptureName = ""
 
-    public var sceneView: ARSCNView?
+    public var arView: ARView?
     private var timer: Timer?
 
     public let pointCloudManager = PointCloudManager()
@@ -42,15 +42,16 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
         super.init()
     }
 
-    public func attach(sceneView: ARSCNView) {
-        self.sceneView = sceneView
-        sceneView.delegate = self
-        sceneView.session.delegate = self
+    public func attach(arView: ARView) {
+        self.arView = arView
+        arView.session.delegate = self
+        // Enable official RealityKit GPU-accelerated mesh visualization
+        arView.debugOptions.insert(.showSceneUnderstanding)
         restartSession()
     }
 
     public func restartSession() {
-        guard let sceneView = sceneView else { return }
+        guard let arView = arView else { return }
         guard ARWorldTrackingConfiguration.isSupported else {
             DispatchQueue.main.async {
                 self.trackingStateText = "AR Not Supported"
@@ -60,13 +61,13 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
 
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            self.runARSession(on: sceneView)
+            self.runARSession(on: arView)
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 DispatchQueue.main.async {
-                    guard let self = self, let sceneView = self.sceneView else { return }
+                    guard let self = self, let arView = self.arView else { return }
                     if granted {
-                        self.runARSession(on: sceneView)
+                        self.runARSession(on: arView)
                     } else {
                         self.trackingStateText = "Camera Access Denied"
                     }
@@ -77,11 +78,11 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
                 self.trackingStateText = "Camera Access Denied"
             }
         @unknown default:
-            self.runARSession(on: sceneView)
+            self.runARSession(on: arView)
         }
     }
 
-    private func runARSession(on sceneView: ARSCNView) {
+    private func runARSession(on arView: ARView) {
         let configuration = ARWorldTrackingConfiguration()
 
         if DeviceUtils.supportsLiDAR {
@@ -91,8 +92,10 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
                 } else {
                     configuration.sceneReconstruction = .mesh
                 }
+                arView.debugOptions.insert(.showSceneUnderstanding)
             } else {
                 configuration.sceneReconstruction = []
+                arView.debugOptions.remove(.showSceneUnderstanding)
             }
 
             if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
@@ -106,7 +109,7 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
         configuration.environmentTexturing = .automatic
         configuration.worldAlignment = .gravity
 
-        sceneView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
+        arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
     }
 
     public func startCapture() {
@@ -115,35 +118,31 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd_HHmmss"
         let timestamp = formatter.string(from: Date())
-        let name = "Scan_\(timestamp)"
-        self.currentCaptureName = name
+        currentCaptureName = "Scan_\(timestamp)"
 
         let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let capturesDir = docDir.appendingPathComponent("Captures")
-        let sessionFolder = capturesDir.appendingPathComponent(name)
+        let sessionFolder = docDir.appendingPathComponent("Captures", isDirectory: true)
+            .appendingPathComponent(currentCaptureName, isDirectory: true)
 
         do {
-            try FileManager.default.createDirectory(at: sessionFolder.appendingPathComponent("images"), withIntermediateDirectories: true)
-            try FileManager.default.createDirectory(at: sessionFolder.appendingPathComponent("depth"), withIntermediateDirectories: true)
-            try FileManager.default.createDirectory(at: sessionFolder.appendingPathComponent("confidence"), withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: sessionFolder, withIntermediateDirectories: true)
+            currentSessionFolder = sessionFolder
         } catch {
-            print("Failed to create session directory: \(error)")
+            print("Failed to create session folder: \(error)")
             return
         }
 
-        self.currentSessionFolder = sessionFolder
+        keyframeManager.reset()
         pointCloudManager.reset()
         meshReconstructor.reset()
-        keyframeManager.reset()
 
         elapsedTime = 0
         keyframeCount = 0
         pointCount = 0
         isRecording = true
         isPaused = false
-        coverageHint = "Scanning • Move smoothly around subject"
+        coverageHint = "Move device slowly around the object"
 
-        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self, self.isRecording, !self.isPaused else { return }
             DispatchQueue.main.async {
@@ -204,9 +203,9 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
                     completion(saved)
                 }
             } catch {
+                print("Failed to finalize capture: \(error)")
                 DispatchQueue.main.async {
                     self.isProcessing = false
-                    self.processingStage = "Error: \(error.localizedDescription)"
                     completion(nil)
                 }
             }
@@ -221,28 +220,38 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
 
         if let folder = currentSessionFolder {
             try? FileManager.default.removeItem(at: folder)
+            currentSessionFolder = nil
         }
-        currentSessionFolder = nil
+
+        keyframeManager.reset()
+        pointCloudManager.reset()
+        meshReconstructor.reset()
+
+        elapsedTime = 0
+        keyframeCount = 0
+        pointCount = 0
+        coverageHint = "Capture cancelled"
     }
 
     // MARK: - ARSessionDelegate
 
     public func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        // Update tracking status
+        // Update tracking state
         switch frame.camera.trackingState {
         case .normal:
-            if !trackingIsNormal {
-                trackingIsNormal = true
-                trackingStateText = "Tracking Normal"
+            trackingIsNormal = true
+            trackingStateText = "Tracking Normal"
+            if !isRecording {
+                coverageHint = "Aim camera and tap Record"
             }
         case .limited(let reason):
             trackingIsNormal = false
             switch reason {
             case .excessiveMotion:
-                trackingStateText = "Limited: Excessive Motion"
+                trackingStateText = "Limited: Too Fast"
                 if isRecording && !isPaused { coverageHint = "Slow down movement" }
             case .insufficientFeatures:
-                trackingStateText = "Limited: Low Features"
+                trackingStateText = "Limited: Low Detail"
                 if isRecording && !isPaused { coverageHint = "Aim at textured surfaces" }
             case .initializing:
                 trackingStateText = "Limited: Initializing..."
@@ -291,72 +300,27 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
         }
     }
 
-    // MARK: - ARSCNViewDelegate
-
-    public func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
-        guard let meshAnchor = anchor as? ARMeshAnchor else { return }
-        meshReconstructor.update(anchor: meshAnchor)
-
-        if mode == .lidarMesh {
-            let overlayNode = buildMeshNode(for: meshAnchor)
-            overlayNode.name = "meshOverlay"
-            node.addChildNode(overlayNode)
-        }
-    }
-
-    public func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {
-        guard let meshAnchor = anchor as? ARMeshAnchor else { return }
-        meshReconstructor.update(anchor: meshAnchor)
-
-        if mode == .lidarMesh {
-            node.childNode(withName: "meshOverlay", recursively: false)?.removeFromParentNode()
-            let overlayNode = buildMeshNode(for: meshAnchor)
-            overlayNode.name = "meshOverlay"
-            node.addChildNode(overlayNode)
-        }
-    }
-
-    public func renderer(_ renderer: SCNSceneRenderer, didRemove node: SCNNode, for anchor: ARAnchor) {
-        guard let meshAnchor = anchor as? ARMeshAnchor else { return }
-        meshReconstructor.remove(anchor: meshAnchor)
-    }
-
-    private func buildMeshNode(for meshAnchor: ARMeshAnchor) -> SCNNode {
-        let geom = meshAnchor.geometry
-        let vSource = geom.vertices
-        let fElement = geom.faces
-
-        let scnVertices = (0..<vSource.count).map { i -> SCNVector3 in
-            let ptr = vSource.buffer.contents().advanced(by: i * vSource.stride).assumingMemoryBound(to: Float.self)
-            return SCNVector3(ptr[0], ptr[1], ptr[2])
-        }
-        let vertexSource = SCNGeometrySource(vertices: scnVertices)
-
-        var indices: [Int32] = []
-        let fBuf = fElement.buffer.contents()
-        let bytesPerIndex = fElement.bytesPerIndex
-
-        for i in 0..<fElement.count {
-            for j in 0..<3 {
-                if bytesPerIndex == 4 {
-                    let idx = fBuf.advanced(by: (i * 3 + j) * 4).assumingMemoryBound(to: UInt32.self).pointee
-                    indices.append(Int32(idx))
-                } else {
-                    let idx = fBuf.advanced(by: (i * 3 + j) * 2).assumingMemoryBound(to: UInt16.self).pointee
-                    indices.append(Int32(idx))
-                }
+    public func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
+        for anchor in anchors {
+            if let meshAnchor = anchor as? ARMeshAnchor {
+                meshReconstructor.update(anchor: meshAnchor)
             }
         }
+    }
 
-        let element = SCNGeometryElement(indices: indices, primitiveType: .triangles)
-        let geometry = SCNGeometry(sources: [vertexSource], elements: [element])
+    public func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
+        for anchor in anchors {
+            if let meshAnchor = anchor as? ARMeshAnchor {
+                meshReconstructor.update(anchor: meshAnchor)
+            }
+        }
+    }
 
-        let material = SCNMaterial()
-        material.fillMode = .lines // Wireframe mesh overlay
-        material.diffuse.contents = UIColor.systemCyan.withAlphaComponent(0.6)
-        material.isDoubleSided = true
-        geometry.materials = [material]
-
-        return SCNNode(geometry: geometry)
+    public func session(_ session: ARSession, didRemove anchors: [ARAnchor]) {
+        for anchor in anchors {
+            if let meshAnchor = anchor as? ARMeshAnchor {
+                meshReconstructor.remove(anchor: meshAnchor)
+            }
+        }
     }
 }

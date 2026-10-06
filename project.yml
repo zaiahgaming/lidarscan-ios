@@ -25,6 +25,11 @@ targets:
           - "Info.plist"
     info:
       path: LidarScan/Info.plist
+    dependencies:
+      - framework: ARKit.framework
+      - framework: RealityKit.framework
+      - framework: SceneKit.framework
+      - framework: AVFoundation.framework
     settings:
       base:
         PRODUCT_NAME: LidarScan
