@@ -23,6 +23,7 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
     @Published public var pointCount = 0
     @Published public var recentKeyframeFlashed = false
     @Published public var sessionErrorMessage: String?
+    @Published public var captureErrorMessage: String?
 
     @Published public var isProcessing = false
     @Published public var processingStage = ""
@@ -211,6 +212,7 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
         timer = nil
 
         isProcessing = true
+        captureErrorMessage = nil
         processingStage = "Preparing capture data..."
         processingProgress = 0.05
 
@@ -244,6 +246,7 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
                 print("Failed to finalize capture: \(error)")
                 DispatchQueue.main.async {
                     self.isProcessing = false
+                    self.captureErrorMessage = error.localizedDescription
                     completion(nil)
                 }
             }
@@ -275,32 +278,32 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
 
     public func session(_ session: ARSession, didUpdate frame: ARFrame) {
         // Update tracking state
+        let isRecordingNow = isRecording
+        let isPausedNow = isPaused
+        let trackingUpdate: (normal: Bool, text: String, hint: String?)
         switch frame.camera.trackingState {
         case .normal:
-            trackingIsNormal = true
-            trackingStateText = "Tracking Normal"
-            if !isRecording {
-                coverageHint = "Aim camera and tap Record"
-            }
+            trackingUpdate = (true, "Tracking Normal", isRecordingNow ? nil : "Aim camera and tap Record")
         case .limited(let reason):
-            trackingIsNormal = false
             switch reason {
             case .excessiveMotion:
-                trackingStateText = "Limited: Too Fast"
-                if isRecording && !isPaused { coverageHint = "Slow down movement" }
+                trackingUpdate = (false, "Limited: Too Fast", isRecordingNow && !isPausedNow ? "Slow down movement" : nil)
             case .insufficientFeatures:
-                trackingStateText = "Limited: Low Detail"
-                if isRecording && !isPaused { coverageHint = "Aim at textured surfaces" }
+                trackingUpdate = (false, "Limited: Low Detail", isRecordingNow && !isPausedNow ? "Aim at textured surfaces" : nil)
             case .initializing:
-                trackingStateText = "Limited: Initializing..."
+                trackingUpdate = (false, "Limited: Initializing...", nil)
             case .relocalizing:
-                trackingStateText = "Limited: Relocalizing..."
+                trackingUpdate = (false, "Limited: Relocalizing...", nil)
             @unknown default:
-                trackingStateText = "Limited Tracking"
+                trackingUpdate = (false, "Limited Tracking", nil)
             }
         case .notAvailable:
-            trackingIsNormal = false
-            trackingStateText = "Tracking Not Available"
+            trackingUpdate = (false, "Tracking Not Available", nil)
+        }
+        DispatchQueue.main.async {
+            self.trackingIsNormal = trackingUpdate.normal
+            self.trackingStateText = trackingUpdate.text
+            if let hint = trackingUpdate.hint { self.coverageHint = hint }
         }
 
         // Auto keyframe collection during active recording

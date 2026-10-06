@@ -4,6 +4,8 @@ import simd
 
 public final class PointCloudManager: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.zaiah.lidarscan.pointcloud", qos: .userInitiated)
+    private let pendingLock = NSLock()
+    private var isProcessingDepthFrame = false
     private var voxels: [VoxelKey: PointRecord] = [:]
     private let voxelSize: Float = 0.01 // 1 cm voxel resolution
     private let maxPoints: Int = 400_000
@@ -18,6 +20,9 @@ public final class PointCloudManager: @unchecked Sendable {
         queue.sync {
             voxels.removeAll(keepingCapacity: true)
         }
+        pendingLock.lock()
+        isProcessingDepthFrame = false
+        pendingLock.unlock()
     }
 
     public func addPoints(
@@ -27,8 +32,22 @@ public final class PointCloudManager: @unchecked Sendable {
         intrinsics: simd_float3x3,
         c2w: simd_float4x4
     ) {
+        // Depth fusion is deliberately lossy when the device cannot keep up.
+        // Dropping a fusion sample is preferable to retaining hundreds of camera buffers.
+        pendingLock.lock()
+        guard !isProcessingDepthFrame else {
+            pendingLock.unlock()
+            return
+        }
+        isProcessingDepthFrame = true
+        pendingLock.unlock()
         queue.async { [weak self] in
             guard let self = self else { return }
+            defer {
+                self.pendingLock.lock()
+                self.isProcessingDepthFrame = false
+                self.pendingLock.unlock()
+            }
             if self.voxels.count >= self.maxPoints { return }
 
             CVPixelBufferLockBaseAddress(depthBuffer, .readOnly)
@@ -68,7 +87,7 @@ public final class PointCloudManager: @unchecked Sendable {
             guard fx_d > 0.0, fy_d > 0.0 else { return }
 
             // Stride to sample evenly
-            let step = 1
+            let step = 2
             for v in stride(from: 0, to: dHeight, by: step) {
                 let dRow = dBase.advanced(by: v * dBytesPerRow).assumingMemoryBound(to: Float32.self)
                 let cRow = cBase.advanced(by: v * cBytesPerRow).assumingMemoryBound(to: UInt8.self)

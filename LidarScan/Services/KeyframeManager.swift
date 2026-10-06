@@ -7,6 +7,8 @@ import simd
 public final class KeyframeManager: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.zaiah.lidarscan.keyframes", qos: .userInitiated)
     private let ciContext = CIContext(options: [CIContextOption.useSoftwareRenderer: false])
+    private let pendingLock = NSLock()
+    private var isRecordingKeyframe = false
 
     private var lastKeyframeTransform: simd_float4x4?
     private var lastKeyframeTime: TimeInterval = 0
@@ -31,11 +33,16 @@ public final class KeyframeManager: @unchecked Sendable {
 
     public func reset() {
         queue.sync {
+            pendingLock.lock()
             lastKeyframeTransform = nil
             lastKeyframeTime = 0
             keyframes.removeAll()
             keyframeIndex = 0
+            pendingLock.unlock()
         }
+        pendingLock.lock()
+        isRecordingKeyframe = false
+        pendingLock.unlock()
     }
 
     public enum FrameAcceptance {
@@ -55,11 +62,20 @@ public final class KeyframeManager: @unchecked Sendable {
         let currentTime = frame.timestamp
 
         // First frame is always accepted
-        guard let lastTransform = lastKeyframeTransform else {
+        pendingLock.lock()
+        guard !isRecordingKeyframe else {
+            pendingLock.unlock()
+            return .skipTooClose
+        }
+        let lastTransform = lastKeyframeTransform
+        let previousTime = lastKeyframeTime
+        pendingLock.unlock()
+
+        guard let lastTransform = lastTransform else {
             return .accept
         }
 
-        let dt = max(0.001, currentTime - lastKeyframeTime)
+        let dt = max(0.001, currentTime - previousTime)
         let tDist = MatrixMath.translationDistance(lastTransform, currentTransform)
         let rAngle = MatrixMath.rotationAngleDegrees(lastTransform, currentTransform)
 
@@ -83,6 +99,16 @@ public final class KeyframeManager: @unchecked Sendable {
         pointCloudManager: PointCloudManager,
         completion: (@Sendable (KeyframeRecord?) -> Void)? = nil
     ) {
+        // ARSession can deliver frames faster than JPEG/depth encoding can finish.
+        // Keep only one frame's pixel buffers alive at a time to bound memory use.
+        pendingLock.lock()
+        guard !isRecordingKeyframe else {
+            pendingLock.unlock()
+            return
+        }
+        isRecordingKeyframe = true
+        pendingLock.unlock()
+
         let transform = frame.camera.transform
         let intrinsics = frame.camera.intrinsics
         let timestamp = frame.timestamp
@@ -92,9 +118,16 @@ public final class KeyframeManager: @unchecked Sendable {
 
         queue.async { [weak self] in
             guard let self = self else { return }
+            defer {
+                self.pendingLock.lock()
+                self.isRecordingKeyframe = false
+                self.pendingLock.unlock()
+            }
 
+            self.pendingLock.lock()
             self.lastKeyframeTransform = transform
             self.lastKeyframeTime = timestamp
+            self.pendingLock.unlock()
             let currentIndex = self.keyframeIndex
             self.keyframeIndex += 1
 
@@ -108,12 +141,19 @@ public final class KeyframeManager: @unchecked Sendable {
             // Save JPEG full res (orientation = sensor landscape, no rotation)
             let ciImage = CIImage(cvPixelBuffer: capturedImage)
             let cs = ciImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
-            if let jpegData = self.ciContext.jpegRepresentation(
+            guard let jpegData = self.ciContext.jpegRepresentation(
                 of: ciImage,
                 colorSpace: cs,
                 options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.9]
-            ) {
-                try? jpegData.write(to: imgURL, options: .atomic)
+            ) else {
+                completion?(nil)
+                return
+            }
+            do {
+                try jpegData.write(to: imgURL, options: .atomic)
+            } catch {
+                completion?(nil)
+                return
             }
 
             var depthRelPath: String? = nil

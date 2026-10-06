@@ -110,12 +110,26 @@ public final class ExportManager: @unchecked Sendable {
         progressHandler(ExportProgress(stage: "Creating \(captureName).lidarscan.zip...", progress: 0.90))
         let parentDir = captureFolder.deletingLastPathComponent()
         let zipURL = parentDir.appendingPathComponent("\(captureName).lidarscan.zip")
+        let temporaryZipURL = parentDir.appendingPathComponent("\(captureName).lidarscan.zip.partial")
 
-        try ZipWriter.zip(
-            folderURL: captureFolder,
-            rootFolderName: captureName,
-            destinationZipURL: zipURL
-        )
+        try? fileManager.removeItem(at: temporaryZipURL)
+        do {
+            try ZipWriter.zip(
+                folderURL: captureFolder,
+                rootFolderName: captureName,
+                destinationZipURL: temporaryZipURL,
+                progressHandler: { fraction in
+                    progressHandler(ExportProgress(
+                        stage: "Creating archive… \(Int(fraction * 100))%",
+                        progress: 0.90 + Float(fraction) * 0.09
+                    ))
+                }
+            )
+            try fileManager.moveItem(at: temporaryZipURL, to: zipURL)
+        } catch {
+            try? fileManager.removeItem(at: temporaryZipURL)
+            throw error
+        }
 
         let fileSize = (try? zipURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
 

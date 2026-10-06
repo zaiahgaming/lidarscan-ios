@@ -4,6 +4,7 @@ public struct ScannerView: View {
     @ObservedObject var captureManager: ARCaptureManager
     @State private var showingLibrary = false
     @State private var showingProcessing = false
+    @State private var showingSaveError = false
     @State private var forceScannerBypass = false
 
     public init(captureManager: ARCaptureManager) {
@@ -25,8 +26,12 @@ public struct ScannerView: View {
                     captureManager: captureManager,
                     onOpenLibrary: { showingLibrary = true },
                     onFinishCapture: {
-                        captureManager.finishCapture { _ in
-                            showingProcessing = true
+                        showingProcessing = true
+                        captureManager.finishCapture { saved in
+                            if saved == nil {
+                                showingProcessing = false
+                                showingSaveError = true
+                            }
                         }
                     }
                 )
@@ -35,13 +40,21 @@ public struct ScannerView: View {
         .sheet(isPresented: $showingLibrary) {
             LibraryView()
         }
-        .alert("AR Session Error", isPresented: Binding(
-            get: { captureManager.sessionErrorMessage != nil },
-            set: { if !$0 { captureManager.sessionErrorMessage = nil } }
-        )) {
-            Button("OK") { captureManager.sessionErrorMessage = nil }
+        .alert(
+            captureManager.sessionErrorMessage == nil ? "Could Not Save Scan" : "AR Session Error",
+            isPresented: Binding(
+                get: { captureManager.sessionErrorMessage != nil || showingSaveError },
+                set: { isPresented in
+                    if !isPresented {
+                        captureManager.sessionErrorMessage = nil
+                        showingSaveError = false
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
         } message: {
-            Text(captureManager.sessionErrorMessage ?? "The camera session could not start.")
+            Text(captureManager.sessionErrorMessage ?? captureManager.captureErrorMessage ?? "The scan could not be saved. Please try a shorter scan and check that your device has free storage.")
         }
         .fullScreenCover(isPresented: $showingProcessing) {
             if let saved = captureManager.lastCompletedCapture {
@@ -59,10 +72,17 @@ public struct ScannerView: View {
                             .scaleEffect(1.5)
                         Text(captureManager.processingStage.isEmpty ? "Processing..." : captureManager.processingStage)
                             .font(.headline)
+                            .multilineTextAlignment(.center)
                             .foregroundColor(.white)
-                        ProgressView(value: Double(captureManager.processingProgress))
-                            .accentColor(.blue)
-                            .padding(.horizontal, 48)
+                        VStack(spacing: 8) {
+                            ProgressView(value: Double(captureManager.processingProgress))
+                                .progressViewStyle(.linear)
+                                .tint(.cyan)
+                            Text("\(Int(captureManager.processingProgress * 100))% complete • \(captureManager.keyframeCount) frames")
+                                .font(.footnote.monospacedDigit())
+                                .foregroundColor(.white.opacity(0.75))
+                        }
+                        .padding(.horizontal, 36)
                     }
                 }
             }

@@ -46,7 +46,12 @@ public enum ZipWriter {
 
     /// Zips a folder recursively into destinationZipURL.
     /// The root directory inside the zip will be rootFolderName (e.g. "Scan_01/metadata.json")
-    public static func zip(folderURL: URL, rootFolderName: String, destinationZipURL: URL) throws {
+    public static func zip(
+        folderURL: URL,
+        rootFolderName: String,
+        destinationZipURL: URL,
+        progressHandler: ((Double) -> Void)? = nil
+    ) throws {
         let fileManager = FileManager.default
 
         // Collect all regular files recursively
@@ -76,6 +81,14 @@ public enum ZipWriter {
             }
         }
 
+        guard entries.count <= Int(UInt16.max) else {
+            throw NSError(domain: "ZipWriter", code: 2, userInfo: [NSLocalizedDescriptionKey: "Capture contains too many files for a standard ZIP archive."])
+        }
+        let totalBytes = entries.reduce(UInt64(0)) { $0 + UInt64($1.size) }
+        guard totalBytes <= UInt64(UInt32.max) else {
+            throw NSError(domain: "ZipWriter", code: 3, userInfo: [NSLocalizedDescriptionKey: "Capture is larger than the supported 4 GB ZIP format limit."])
+        }
+
         if fileManager.fileExists(atPath: destinationZipURL.path) {
             try fileManager.removeItem(at: destinationZipURL)
         }
@@ -84,6 +97,8 @@ public enum ZipWriter {
         defer { try? outHandle.close() }
 
         var currentOffset: UInt32 = 0
+        var bytesWritten: UInt64 = 0
+        var lastReportedProgress = 0.0
 
         // 1. Write Local File Headers + Data
         for i in 0..<entries.count {
@@ -127,6 +142,14 @@ public enum ZipWriter {
                 if chunk.isEmpty { break }
                 outHandle.write(chunk)
                 currentOffset += UInt32(chunk.count)
+                bytesWritten += UInt64(chunk.count)
+                if totalBytes > 0 {
+                    let fraction = Double(bytesWritten) / Double(totalBytes)
+                    if fraction >= lastReportedProgress + 0.01 || fraction >= 1.0 {
+                        lastReportedProgress = fraction
+                        progressHandler?(fraction)
+                    }
+                }
             }
             try? inHandle.close()
         }
