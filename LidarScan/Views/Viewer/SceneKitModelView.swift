@@ -121,12 +121,12 @@ public struct SceneKitModelView: UIViewRepresentable {
         binaryData.withUnsafeBytes { rawPtr in
             for i in 0..<pointCount {
                 let offset = i * stride
-                let x = rawPtr.load(fromByteOffset: offset, as: Float.self)
-                let y = rawPtr.load(fromByteOffset: offset + 4, as: Float.self)
-                let z = rawPtr.load(fromByteOffset: offset + 8, as: Float.self)
-                let r = Float(rawPtr.load(fromByteOffset: offset + 12, as: UInt8.self)) / 255.0
-                let g = Float(rawPtr.load(fromByteOffset: offset + 13, as: UInt8.self)) / 255.0
-                let b = Float(rawPtr.load(fromByteOffset: offset + 14, as: UInt8.self)) / 255.0
+                let x = rawPtr.loadUnaligned(fromByteOffset: offset, as: Float.self)
+                let y = rawPtr.loadUnaligned(fromByteOffset: offset + 4, as: Float.self)
+                let z = rawPtr.loadUnaligned(fromByteOffset: offset + 8, as: Float.self)
+                let r = Float(rawPtr.loadUnaligned(fromByteOffset: offset + 12, as: UInt8.self)) / 255.0
+                let g = Float(rawPtr.loadUnaligned(fromByteOffset: offset + 13, as: UInt8.self)) / 255.0
+                let b = Float(rawPtr.loadUnaligned(fromByteOffset: offset + 14, as: UInt8.self)) / 255.0
 
                 vertices.append(SCNVector3(x, y, z))
                 colors.append(SCNVector3(r, g, b))

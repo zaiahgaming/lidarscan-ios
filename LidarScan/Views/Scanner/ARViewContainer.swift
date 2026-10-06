@@ -15,7 +15,9 @@ public struct ARViewContainer: UIViewRepresentable {
         scnView.autoenablesDefaultLighting = true
         scnView.showsStatistics = false
 
-        captureManager.attach(sceneView: scnView)
+        DispatchQueue.main.async {
+            captureManager.attach(sceneView: scnView)
+        }
         return scnView
     }
 

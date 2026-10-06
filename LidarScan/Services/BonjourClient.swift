@@ -71,10 +71,13 @@ public final class BonjourClient: NSObject, ObservableObject, NetServiceBrowserD
         var ipAddress = hostName
         if let addresses = sender.addresses {
             for data in addresses {
+                guard data.count >= MemoryLayout<sockaddr>.size else { continue }
                 data.withUnsafeBytes { rawPtr in
-                    let sockaddr = rawPtr.bindMemory(to: sockaddr.self).baseAddress!
-                    if sockaddr.pointee.sa_family == UInt8(AF_INET) {
-                        var addr = rawPtr.bindMemory(to: sockaddr_in.self).baseAddress!.pointee.sin_addr
+                    guard let base = rawPtr.baseAddress else { return }
+                    let sa = base.assumingMemoryBound(to: sockaddr.self)
+                    if sa.pointee.sa_family == UInt8(AF_INET) && data.count >= MemoryLayout<sockaddr_in>.size {
+                        let sin = base.assumingMemoryBound(to: sockaddr_in.self)
+                        var addr = sin.pointee.sin_addr
                         var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
                         if inet_ntop(AF_INET, &addr, &buffer, socklen_t(INET_ADDRSTRLEN)) != nil {
                             ipAddress = String(cString: buffer)

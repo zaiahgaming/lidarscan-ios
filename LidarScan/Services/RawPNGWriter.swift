@@ -51,12 +51,14 @@ public enum RawPNGWriter {
         let destCapacity = max(sourceData.count + 1024, 65536)
         var destData = Data(count: destCapacity)
 
-        let compressedSize = sourceData.withUnsafeBytes { srcPtr in
-            destData.withUnsafeMutableBytes { dstPtr in
-                compression_encode_buffer(
-                    dstPtr.bindMemory(to: UInt8.self).baseAddress!,
+        let compressedSize = sourceData.withUnsafeBytes { srcPtr -> Int in
+            destData.withUnsafeMutableBytes { dstPtr -> Int in
+                guard let dstBase = dstPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                      let srcBase = srcPtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return 0 }
+                return compression_encode_buffer(
+                    dstBase,
                     destCapacity,
-                    srcPtr.bindMemory(to: UInt8.self).baseAddress!,
+                    srcBase,
                     sourceData.count,
                     nil,
                     COMPRESSION_ZLIB

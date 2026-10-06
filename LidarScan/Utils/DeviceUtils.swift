@@ -4,6 +4,7 @@ import Darwin
 
 public enum DeviceUtils {
     public static var supportsLiDAR: Bool {
+        guard ARWorldTrackingConfiguration.isSupported else { return false }
         return ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) &&
                ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)
     }

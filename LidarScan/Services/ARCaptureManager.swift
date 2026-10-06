@@ -2,6 +2,7 @@ import Foundation
 import ARKit
 import SceneKit
 import Combine
+import AVFoundation
 
 public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelegate, ARSCNViewDelegate {
     @Published public var mode: CaptureMode = .lidarMesh {
@@ -50,6 +51,37 @@ public final class ARCaptureManager: NSObject, ObservableObject, ARSessionDelega
 
     public func restartSession() {
         guard let sceneView = sceneView else { return }
+        guard ARWorldTrackingConfiguration.isSupported else {
+            DispatchQueue.main.async {
+                self.trackingStateText = "AR Not Supported"
+            }
+            return
+        }
+
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            self.runARSession(on: sceneView)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                DispatchQueue.main.async {
+                    guard let self = self, let sceneView = self.sceneView else { return }
+                    if granted {
+                        self.runARSession(on: sceneView)
+                    } else {
+                        self.trackingStateText = "Camera Access Denied"
+                    }
+                }
+            }
+        case .denied, .restricted:
+            DispatchQueue.main.async {
+                self.trackingStateText = "Camera Access Denied"
+            }
+        @unknown default:
+            self.runARSession(on: sceneView)
+        }
+    }
+
+    private func runARSession(on sceneView: ARSCNView) {
         let configuration = ARWorldTrackingConfiguration()
 
         if DeviceUtils.supportsLiDAR {

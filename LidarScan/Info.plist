@@ -36,7 +36,6 @@
 	</array>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>arkit</string>
 		<string>arm64</string>
 	</array>
 	<key>UILaunchScreen</key>
