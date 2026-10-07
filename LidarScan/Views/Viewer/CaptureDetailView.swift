@@ -1,8 +1,11 @@
 import SwiftUI
 
+/// Full 3D inspection of a saved capture. Uses a real navigation toolbar
+/// instead of a hand-drawn bar so titles, actions, and safe areas all behave
+/// exactly like the rest of the system.
 public struct CaptureDetailView: View {
     public let capture: SavedCapture
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
 
     @State private var preferPointCloud = false
     @State private var showWireframe = false
@@ -14,128 +17,42 @@ public struct CaptureDetailView: View {
     }
 
     public var body: some View {
-        ZStack {
-            Color(red: 0.07, green: 0.07, blue: 0.09)
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // Top Navigation Bar
-                HStack {
-                    Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Color.white.opacity(0.1))
-                            .clipShape(Circle())
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(capture.name)
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        Text("\(capture.frameCount) frames • \(capture.formattedSize)")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                    .padding(.leading, 6)
-
-                    Spacer()
-
-                    Button(action: { showingStudioUpload = true }) {
-                        Image(systemName: "desktopcomputer")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Color.blue)
-                            .clipShape(Circle())
-                    }
-
-                    Button(action: { showingShareSheet = true }) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Color.white.opacity(0.1))
-                            .clipShape(Circle())
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 8)
-
-                // 3D Scene View
-                ZStack(alignment: .bottomTrailing) {
-                    SceneKitModelView(
-                        captureFolder: capture.folderURL,
-                        showWireframe: showWireframe,
-                        preferPointCloud: preferPointCloud
-                    )
-                    .ignoresSafeArea()
-
-                    // Floating 3D Controls
-                    VStack(spacing: 10) {
-                        Button(action: { preferPointCloud.toggle() }) {
-                            Image(systemName: preferPointCloud ? "circle.grid.cross.fill" : "cube.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(.white)
-                                .frame(width: 40, height: 40)
-                                .background(Color.black.opacity(0.7))
-                                .clipShape(Circle())
-                        }
-
-                        Button(action: { showWireframe.toggle() }) {
-                            Image(systemName: showWireframe ? "square.dashed" : "square")
-                                .font(.system(size: 16))
-                                .foregroundColor(showWireframe ? .cyan : .white)
-                                .frame(width: 40, height: 40)
-                                .background(Color.black.opacity(0.7))
-                                .clipShape(Circle())
-                        }
-                    }
+        NavigationStack {
+            SceneKitModelView(
+                captureFolder: capture.folderURL,
+                showWireframe: showWireframe,
+                preferPointCloud: preferPointCloud
+            )
+            .ignoresSafeArea()
+            .overlay(alignment: .bottomTrailing) {
+                viewerControls
                     .padding(16)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if verticalSizeClass != .compact {
+                    infoFooter
                 }
-
-                // Info Footer
-                HStack(spacing: 20) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Captured")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.gray)
-                        Text(capture.formattedDate)
-                            .font(.caption)
-                            .foregroundColor(.white)
+            }
+            .navigationTitle(capture.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingStudioUpload = true
+                    } label: {
+                        Label("Send to PC", systemImage: "desktopcomputer")
                     }
-
-                    Divider().frame(height: 24).background(Color.gray.opacity(0.3))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Points")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.gray)
-                        Text("\(capture.pointCount)")
-                            .font(.caption.monospaced())
-                            .foregroundColor(.green)
-                    }
-
-                    Divider().frame(height: 24).background(Color.gray.opacity(0.3))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Mesh")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.gray)
-                        Text(capture.hasMesh ? "OBJ/PLY/USDZ/GLB" : "None")
-                            .font(.caption)
-                            .foregroundColor(capture.hasMesh ? .cyan : .gray)
-                    }
-
-                    Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color.black.opacity(0.6))
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingShareSheet = true
+                    } label: {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                }
             }
         }
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $showingStudioUpload) {
             StudioUploadSheet(capture: capture)
         }
@@ -143,6 +60,67 @@ public struct CaptureDetailView: View {
             if let zip = capture.zipURL {
                 ShareSheet(activityItems: [zip])
             }
+        }
+    }
+
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    private var viewerControls: some View {
+        VStack(spacing: 12) {
+            GlassIconButton(
+                systemImage: preferPointCloud ? "circle.grid.cross.fill" : "cube.fill",
+                diameter: 44
+            ) {
+                preferPointCloud.toggle()
+            }
+            .accessibilityLabel(Text(preferPointCloud ? "Show mesh" : "Show point cloud"))
+
+            GlassIconButton(
+                systemImage: showWireframe ? "square.dashed" : "square",
+                diameter: 44
+            ) {
+                showWireframe.toggle()
+            }
+            .accessibilityLabel(Text(showWireframe ? "Hide wireframe" : "Show wireframe"))
+        }
+    }
+
+    private var infoFooter: some View {
+        HStack(spacing: 18) {
+            footerStat(title: "Captured", value: capture.formattedDate)
+
+            Divider().frame(height: 26).opacity(0.4)
+
+            footerStat(title: "Points", value: "\(capture.pointCount)", tint: .green)
+
+            Divider().frame(height: 26).opacity(0.4)
+
+            footerStat(
+                title: "Mesh",
+                value: capture.hasMesh ? "OBJ · PLY · USDZ · GLB" : "None",
+                tint: capture.hasMesh ? .cyan : nil
+            )
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .adaptiveGlassCard(cornerRadius: 0)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+    }
+
+    private func footerStat(title: String, value: String, tint: Color? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            Text(value)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(tint ?? Color.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
     }
 }

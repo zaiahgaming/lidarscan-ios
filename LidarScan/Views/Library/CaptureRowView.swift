@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// A single scan row. Uses system text styles so rows grow gracefully with
+/// Dynamic Type instead of clipping fixed-size text.
 public struct CaptureRowView: View {
     public let capture: SavedCapture
 
@@ -9,32 +11,27 @@ public struct CaptureRowView: View {
 
     public var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(0.08))
-                    .frame(width: 44, height: 44)
-                Image(systemName: capture.hasMesh ? "cube.fill" : "circle.grid.cross.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(capture.hasMesh ? .cyan : .green)
-            }
+            Image(systemName: capture.hasMesh ? "cube.fill" : "circle.grid.cross.fill")
+                .font(.title3)
+                .foregroundStyle(capture.hasMesh ? Color.cyan : Color.green)
+                .frame(width: 40, height: 40)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(capture.name)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Text(capture.formattedDate)
-                        .lineLimit(1)
                     Text("•")
                     Text("\(capture.frameCount) frames")
-                        .lineLimit(1)
                 }
-                .font(.caption)
-                .foregroundColor(.gray)
-                .fixedSize(horizontal: true, vertical: false)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             }
             .layoutPriority(1)
 
@@ -42,19 +39,17 @@ public struct CaptureRowView: View {
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text(capture.formattedSize)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.gray)
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
 
                 if capture.hasMesh {
                     Text("MESH")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.caption2.weight(.bold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.cyan.opacity(0.2))
-                        .foregroundColor(.cyan)
-                        .cornerRadius(4)
+                        .background(.cyan.opacity(0.18), in: Capsule())
+                        .foregroundStyle(.cyan)
                 }
             }
         }

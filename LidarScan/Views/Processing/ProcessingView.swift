@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Success screen shown immediately after a scan finishes saving.
 public struct ProcessingView: View {
     public let capture: SavedCapture
     public let onDismiss: () -> Void
@@ -14,99 +15,42 @@ public struct ProcessingView: View {
     }
 
     public var body: some View {
-        ZStack {
-            Color(red: 0.06, green: 0.06, blue: 0.08)
-                .ignoresSafeArea()
+        VStack(spacing: 24) {
+            Spacer()
 
-            VStack(spacing: 24) {
-                Spacer()
+            ZStack {
+                Circle()
+                    .fill(.green.opacity(0.16))
+                    .frame(width: 92, height: 92)
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 46))
+                    .foregroundStyle(.green)
+            }
+            .accessibilityHidden(true)
 
-                // Success Badge
-                ZStack {
-                    Circle()
-                        .fill(Color.green.opacity(0.15))
-                        .frame(width: 88, height: 88)
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 46))
-                        .foregroundColor(.green)
-                }
+            VStack(spacing: 6) {
+                Text("Scan Saved")
+                    .font(.title2.bold())
+                Text(capture.name)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.horizontal, 24)
+            }
 
-                VStack(spacing: 8) {
-                    Text("Capture Processed!")
-                        .font(.title2.bold())
-                        .foregroundColor(.white)
-                    Text(capture.name)
-                        .font(.headline)
-                        .foregroundColor(.gray)
-                }
-
-                // Stats Grid
-                HStack(spacing: 16) {
-                    StatCard(title: "FRAMES", value: "\(capture.frameCount)", icon: "camera.fill", color: .cyan)
-                    StatCard(title: "POINTS", value: formatNumber(capture.pointCount), icon: "circle.grid.cross.fill", color: .green)
-                    StatCard(title: "SIZE", value: capture.formattedSize, icon: "doc.zipper", color: .blue)
-                }
+            statGrid
                 .padding(.horizontal, 24)
 
-                Spacer()
+            Spacer()
 
-                // Action Buttons
-                VStack(spacing: 12) {
-                    Button(action: { showing3DViewer = true }) {
-                        HStack {
-                            Image(systemName: "cube.transparent.fill")
-                            Text("Interactive 3D Viewer")
-                        }
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(Color.blue)
-                        .cornerRadius(14)
-                    }
-
-                    Button(action: { showingStudioUpload = true }) {
-                        HStack {
-                            Image(systemName: "desktopcomputer")
-                            Text("Send to PC Studio")
-                        }
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(Color.white.opacity(0.12))
-                        .cornerRadius(14)
-                    }
-
-                    HStack(spacing: 12) {
-                        Button(action: { showingShareSheet = true }) {
-                            HStack {
-                                Image(systemName: "square.and.arrow.up")
-                                Text("Share Zip")
-                            }
-                            .font(.subheadline.bold())
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .background(Color.white.opacity(0.08))
-                            .cornerRadius(12)
-                        }
-
-                        Button(action: onDismiss) {
-                            Text("New Scan")
-                                .font(.subheadline.bold())
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 48)
-                                .background(Color.white.opacity(0.08))
-                                .cornerRadius(12)
-                        }
-                    }
-                }
+            actionButtons
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
-            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $showing3DViewer) {
             CaptureDetailView(capture: capture)
         }
@@ -116,6 +60,54 @@ public struct ProcessingView: View {
         .sheet(isPresented: $showingShareSheet) {
             if let zip = capture.zipURL {
                 ShareSheet(activityItems: [zip])
+            }
+        }
+    }
+
+    private var statGrid: some View {
+        HStack(spacing: 12) {
+            StatCard(title: "Frames", value: "\(capture.frameCount)", icon: "camera.fill", tint: .cyan)
+            StatCard(title: "Points", value: formatNumber(capture.pointCount), icon: "circle.grid.cross.fill", tint: .green)
+            StatCard(title: "Size", value: capture.formattedSize, icon: "doc.zipper", tint: .blue)
+        }
+    }
+
+    private var actionButtons: some View {
+        VStack(spacing: 12) {
+            Button {
+                showing3DViewer = true
+            } label: {
+                Label("Interactive 3D Viewer", systemImage: "cube.transparent.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.borderedProminent)
+
+            Button {
+                showingStudioUpload = true
+            } label: {
+                Label("Send to PC Studio", systemImage: "desktopcomputer")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.bordered)
+
+            HStack(spacing: 12) {
+                Button {
+                    showingShareSheet = true
+                } label: {
+                    Label("Share Zip", systemImage: "square.and.arrow.up")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+
+                Button(action: onDismiss) {
+                    Text("New Scan")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
             }
         }
     }
@@ -135,23 +127,24 @@ private struct StatCard: View {
     let title: String
     let value: String
     let icon: String
-    let color: Color
+    let tint: Color
 
     var body: some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundColor(color)
+                .font(.body)
+                .foregroundStyle(tint)
             Text(value)
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
+                .font(.body.weight(.bold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
             Text(title)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.gray)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
-        .background(Color.white.opacity(0.06))
-        .cornerRadius(12)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

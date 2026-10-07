@@ -8,5 +8,6 @@ public struct RootView: View {
     public var body: some View {
         ScannerView(captureManager: captureManager)
             .preferredColorScheme(.dark)
+            .tint(.cyan)
     }
 }

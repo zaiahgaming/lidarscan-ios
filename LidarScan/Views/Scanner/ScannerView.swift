@@ -64,27 +64,26 @@ public struct ScannerView: View {
                     captureManager.restartSession()
                 })
             } else {
-                ZStack {
-                    Color.black.ignoresSafeArea()
-                    VStack(spacing: 20) {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(1.5)
-                        Text(captureManager.processingStage.isEmpty ? "Processing..." : captureManager.processingStage)
-                            .font(.headline)
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.white)
-                        VStack(spacing: 8) {
-                            ProgressView(value: Double(captureManager.processingProgress))
-                                .progressViewStyle(.linear)
-                                .tint(.cyan)
-                            Text("\(Int(captureManager.processingProgress * 100))% complete • \(captureManager.keyframeCount) frames")
-                                .font(.footnote.monospacedDigit())
-                                .foregroundColor(.white.opacity(0.75))
-                        }
-                        .padding(.horizontal, 36)
+                // Saving is already in progress; show live progress until the
+                // saved-capture screen takes over.
+                VStack(spacing: 20) {
+                    ProgressView()
+                        .controlSize(.large)
+                        .tint(.white)
+                    Text(captureManager.processingStage.isEmpty ? "Processing…" : captureManager.processingStage)
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                    VStack(spacing: 8) {
+                        ProgressView(value: Double(captureManager.processingProgress))
+                            .progressViewStyle(.linear)
+                        Text("\(Int(captureManager.processingProgress * 100))% complete • \(captureManager.keyframeCount) frames")
+                            .font(.footnote.monospacedDigit())
+                            .foregroundStyle(.secondary)
                     }
+                    .padding(.horizontal, 36)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemBackground))
             }
         }
     }

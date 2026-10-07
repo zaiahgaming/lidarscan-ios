@@ -1,7 +1,7 @@
 import SwiftUI
 
 public struct LibraryView: View {
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     @State private var captures: [SavedCapture] = []
     @State private var selectedCapture: SavedCapture?
     @State private var captureToShare: SavedCapture?
@@ -13,83 +13,32 @@ public struct LibraryView: View {
     public init() {}
 
     public var body: some View {
-        NavigationView {
-            ZStack {
-                Color(red: 0.07, green: 0.07, blue: 0.09)
-                    .ignoresSafeArea()
-
+        NavigationStack {
+            Group {
                 if captures.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "folder.badge.questionmark")
-                            .font(.system(size: 48))
-                            .foregroundColor(.gray)
-                        Text("No Scans Yet")
-                            .font(.title3.bold())
-                            .foregroundColor(.white)
+                    ContentUnavailableView {
+                        Label("No Scans Yet", systemImage: "square.stack.3d.up.slash")
+                    } description: {
                         Text("Completed scans will appear here and in the Files app.")
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
                     }
                 } else {
-                    List {
-                        ForEach(captures) { capture in
-                            CaptureRowView(capture: capture)
-                                .listRowBackground(Color.white.opacity(0.04))
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selectedCapture = capture
-                                }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button(role: .destructive) {
-                                        deleteCapture(capture)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-
-                                    Button {
-                                        captureToRename = capture
-                                        renameText = capture.name
-                                        showingRenameAlert = true
-                                    } label: {
-                                        Label("Rename", systemImage: "pencil")
-                                    }
-                                    .tint(.orange)
-                                }
-                                .swipeActions(edge: .leading) {
-                                    Button {
-                                        captureToUpload = capture
-                                    } label: {
-                                        Label("PC Studio", systemImage: "desktopcomputer")
-                                    }
-                                    .tint(.blue)
-
-                                    Button {
-                                        captureToShare = capture
-                                    } label: {
-                                        Label("Share", systemImage: "square.and.arrow.up")
-                                    }
-                                    .tint(.green)
-                                }
-                        }
-                    }
-                    .listStyle(InsetGroupedListStyle())
-                    .refreshable {
+                    scanList
+                }
+            }
+            .navigationTitle("Scans Library")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
                         loadCaptures()
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
                     }
                 }
             }
-            .navigationBarTitle("Scans Library", displayMode: .inline)
-            .navigationBarItems(
-                leading: Button("Close") {
-                    presentationMode.wrappedValue.dismiss()
-                }.foregroundColor(.white),
-                trailing: Button(action: loadCaptures) {
-                    Image(systemName: "arrow.clockwise")
-                        .foregroundColor(.white)
-                }
-            )
             .onAppear(perform: loadCaptures)
             .sheet(item: $selectedCapture) { capture in
                 CaptureDetailView(capture: capture)
@@ -111,6 +60,54 @@ public struct LibraryView: View {
                     }
                 }
             }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var scanList: some View {
+        List {
+            ForEach(captures) { capture in
+                CaptureRowView(capture: capture)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        selectedCapture = capture
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            deleteCapture(capture)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+
+                        Button {
+                            captureToRename = capture
+                            renameText = capture.name
+                            showingRenameAlert = true
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        .tint(.orange)
+                    }
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            captureToUpload = capture
+                        } label: {
+                            Label("PC Studio", systemImage: "desktopcomputer")
+                        }
+                        .tint(.blue)
+
+                        Button {
+                            captureToShare = capture
+                        } label: {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                        .tint(.green)
+                    }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .refreshable {
+            loadCaptures()
         }
     }
 
