@@ -133,7 +133,7 @@ public struct StudioUploadSheet: View {
                                 Text(server.name)
                                     .font(.body.weight(.medium))
                                     .foregroundStyle(.primary)
-                                Text("\(selectedHost.isEmpty ? server.host : selectedHost):\(server.port)")
+                                Text(verbatim: "\(selectedHost.isEmpty ? server.host : selectedHost):\(server.port)")
                                     .font(.caption.monospacedDigit())
                                     .foregroundStyle(.secondary)
 
@@ -202,7 +202,7 @@ public struct StudioUploadSheet: View {
                     uploadClient.ping(host: lastStudioHost, port: lastStudioPort) { _, _ in }
                 } label: {
                     Label {
-                        Text("Last used: \(lastStudioHost):\(lastStudioPort)")
+                        Text(verbatim: "Last used: \(lastStudioHost):\(lastStudioPort)")
                             .font(.footnote.monospacedDigit())
                     } icon: {
                         Image(systemName: "clock.arrow.circlepath")
