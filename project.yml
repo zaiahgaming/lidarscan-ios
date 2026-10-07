@@ -23,8 +23,11 @@ targets:
       - path: LidarScan
         excludes:
           - "Info.plist"
-    info:
-      path: LidarScan/Info.plist
+    # NOTE: Do not add an `info:` block. XcodeGen rewrites the plist at `info.path`
+    # with defaults-only content on every `xcodegen generate`, which wiped
+    # UILaunchScreen and the orientation keys and forced iOS compatibility
+    # scaling ("iPhone 4 sized" UI). The checked-in Info.plist is the single
+    # source of truth and is used via INFOPLIST_FILE below.
     dependencies:
       - sdk: ARKit.framework
       - sdk: RealityKit.framework

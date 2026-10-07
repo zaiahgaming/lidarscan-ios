@@ -71,21 +71,35 @@ jobs:
               declared = plistlib.load(stream)
           for key, value in declared.items():
               built.setdefault(key, value)
-          # Enforce required keys explicitly because XcodeGen may omit plist entries
-          # when generating the project, even though they exist in the source plist.
+          # Enforce required keys explicitly. Missing UILaunchScreen in particular
+          # makes iOS run the app in legacy compatibility mode (scaled "iPhone 4
+          # sized" UI), so it must always be present.
           built.update({
               "NSCameraUsageDescription": "LidarScan requires camera access to capture RGB frames and spatial keyframes for 3D reconstruction.",
               "NSLocalNetworkUsageDescription": "LidarScan discovers local PC Studio servers via Bonjour to stream and upload 3D captures.",
               "NSBonjourServices": ["_lidarscan._tcp"],
               "UIFileSharingEnabled": True,
               "LSSupportsOpeningDocumentsInPlace": True,
+              "UILaunchScreen": {},
+              "UISupportedInterfaceOrientations": [
+                  "UIInterfaceOrientationPortrait",
+                  "UIInterfaceOrientationLandscapeLeft",
+                  "UIInterfaceOrientationLandscapeRight",
+              ],
+              "UISupportedInterfaceOrientations~ipad": [
+                  "UIInterfaceOrientationPortrait",
+                  "UIInterfaceOrientationPortraitUpsideDown",
+                  "UIInterfaceOrientationLandscapeLeft",
+                  "UIInterfaceOrientationLandscapeRight",
+              ],
+              "CFBundleDisplayName": "LidarScan",
           })
           with open(app_path, "wb") as stream:
               plistlib.dump(built, stream, fmt=plistlib.FMT_XML, sort_keys=False)
           PY
           plutil -lint "$APP_PLIST"
           plutil -p "$APP_PLIST"
-          for key in NSCameraUsageDescription NSLocalNetworkUsageDescription UIFileSharingEnabled LSSupportsOpeningDocumentsInPlace NSBonjourServices; do
+          for key in NSCameraUsageDescription NSLocalNetworkUsageDescription UIFileSharingEnabled LSSupportsOpeningDocumentsInPlace NSBonjourServices UILaunchScreen UISupportedInterfaceOrientations CFBundleDisplayName; do
             /usr/libexec/PlistBuddy -c "Print :$key" "$APP_PLIST" >/dev/null
           done
           zip -qr LidarScan-unsigned.ipa Payload
