@@ -47,6 +47,16 @@ public enum RawPNGWriter {
         return chunk
     }
 
+    private static func adler32(_ data: Data) -> UInt32 {
+        var a: UInt32 = 1
+        var b: UInt32 = 0
+        for byte in data {
+            a = (a + UInt32(byte)) % 65521
+            b = (b + a) % 65521
+        }
+        return (b << 16) | a
+    }
+
     private static func compressZlib(_ sourceData: Data) -> Data? {
         let destCapacity = max(sourceData.count + 1024, 65536)
         var destData = Data(count: destCapacity)
@@ -68,7 +78,15 @@ public enum RawPNGWriter {
 
         guard compressedSize > 0 else { return nil }
         destData.count = compressedSize
-        return destData
+
+        // Apple's COMPRESSION_ZLIB produces raw DEFLATE (RFC 1951) — despite the
+        // name it omits the zlib (RFC 1950) 2-byte header and Adler-32 trailer.
+        // PNG IDAT streams must be real zlib, so wrap the deflate output here.
+        var wrapped = Data([0x78, 0x01]) // CMF: 32K window, FLG: fastest
+        wrapped.append(destData)
+        var checksum = adler32(sourceData).bigEndian
+        wrapped.append(Data(bytes: &checksum, count: 4))
+        return wrapped
     }
 
     /// Writes 16-bit uint16 depth PNG in millimeters (LiDAR resolution 256x192, 0 = invalid)
