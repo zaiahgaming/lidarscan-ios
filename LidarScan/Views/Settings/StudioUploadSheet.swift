@@ -172,7 +172,7 @@ public struct StudioUploadSheet: View {
                                 selectedHost == ip ? AnyShapeStyle(.tint.opacity(0.25)) : AnyShapeStyle(.quaternary),
                                 in: Capsule()
                             )
-                            .foregroundStyle(selectedHost == ip ? Color.tint : Color.secondary)
+                            .foregroundStyle(selectedHost == ip ? Color.accentColor : Color.secondary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -242,7 +242,7 @@ public struct StudioUploadSheet: View {
         Section("Transfer") {
             VStack(alignment: .leading, spacing: 10) {
                 ProgressView(value: uploadClient.uploadProgress)
-                    .tint(uploadCompleted ? .green : .tint)
+                    .tint(uploadCompleted ? Color.green : Color.accentColor)
 
                 Text(uploadClient.uploadStatus)
                     .font(.footnote)
