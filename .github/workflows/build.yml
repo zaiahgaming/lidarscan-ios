@@ -14,6 +14,11 @@ jobs:
     runs-on: macos-26
     permissions:
       contents: write
+    # GitHub sometimes fires duplicate runs for the same tag push seconds apart;
+    # serialize per-ref so only one build/release happens.
+    concurrency:
+      group: build-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout repository
@@ -117,6 +122,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" LidarScan-unsigned.ipa \
-            --title "LidarScan ${{ github.ref_name }}" \
-            --generate-notes
+          TAG="${{ github.ref_name }}"
+          # Idempotent: create the release only if missing, then always (re)upload
+          # the asset so a duplicate run for the same tag still succeeds.
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --title "LidarScan $TAG" --generate-notes
+          gh release upload "$TAG" LidarScan-unsigned.ipa --clobber
